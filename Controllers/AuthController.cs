@@ -1,103 +1,32 @@
-﻿using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-using JwtBaseApiNetCore.Models;
-using JwtBaseApiNetCore.Services;
+﻿using ApiWikiTech.Models;
+using ApiWikiTech.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
 using System.Security.Cryptography;
-using Microsoft.AspNetCore.Components.Web;
-using Amazon.Runtime;
+using ApiWikiTech.Util;
 
-namespace JwtBaseApiNetCore.Controllers
+
+namespace ApiWikiTech.Controllers
 {
     [Route("api")]
     [ApiController]
-    public class UsersController : ControllerBase
+    public class AuthController : ControllerBase
     {
         private readonly MongoDBService _mongoDBService;
         private readonly IConfiguration _config;
+        private readonly JwtConfig _jwtConfig;
 
-        /// <summary>
-        /// Verifica algun campo de una  lista de string viene vacío o es null
-        /// </summary>
-        /// <param name="fields"></param>
-        /// <returns>True si un campo está vacío o es null</returns>
-        private static bool ValidateFields(List<string> fields)
-        {
-            foreach (string field in fields)
-            {
-                if (String.IsNullOrEmpty(field.Trim()))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
 
-        private static bool ByteArraysEqual(byte[] a, byte[] b)
-        {
-            if (ReferenceEquals(a, b))
-                return true;
-
-            if (a == null || b == null || a.Length != b.Length)
-                return false;
-
-            bool areEqual = true;
-            for (int i = 0; i < a.Length; i++)
-            {
-                areEqual &= (a[i] == b[i]);
-            }
-
-            return areEqual;
-        }
-        private string GenerateToken(string email)
-        {
-            try
-            {
-                var claims = new[]
-                {
-                    new Claim(JwtRegisteredClaimNames.Sub, email),
-                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                };
-
-                SymmetricSecurityKey key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["JWT:Key"]));
-                SigningCredentials creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-                JwtSecurityToken token = new JwtSecurityToken(_config["JWT:Issuer"],
-                  _config["JWT:Audience"],
-                  claims,
-                  expires: DateTime.Now.AddMinutes(30),
-                  signingCredentials: creds);
-
-                string strToken = new JwtSecurityTokenHandler().WriteToken(token);
-
-                return strToken;
-            }
-            catch (Exception e)
-            {
-                return String.Empty;
-            }
-        }
-        public UsersController(IConfiguration config, MongoDBService mongoDBService)
+        public AuthController(IConfiguration config, MongoDBService mongoDBService)
         {
             _mongoDBService = mongoDBService;
-            _config = config;
+            _jwtConfig = new JwtConfig { Key = config["JWT:Key"], Issuer = config["JWT:Issuer"], Audience = config["JWT:Audience"] };
         }
-
-        [Authorize]
-        [HttpGet("users")]
-        public async Task<List<User>> Get()
+        [HttpGet]
+        public async Task<IActionResult> GetAllUsers()
         {
-            try
-            {
-                return await _mongoDBService.GetAsyncUsers();
-            }
-            catch (Exception e)
-            {
-                return new List<User>();
-            }
+            var users = await _mongoDBService.GetAsyncUsers();
+            return Ok(users);
         }
 
         [HttpPost("register")]
@@ -105,10 +34,11 @@ namespace JwtBaseApiNetCore.Controllers
         {
             try
             {
-                if (ValidateFields(new List<string> { user.Username, user.Email, user.Phone, user.Password }))
+
+                if (IToken.ValidateFields(new List<string> { user.Id, user.Username, user.Email, user.Phone, user.Password }))
                     return BadRequest("Es necesario que ingrese todos los campos que sean obligatorios");
 
-                User userDB = new User() { Username = user.Username, Email = user.Email, Phone = user.Phone, Password = user.Password };
+                User userDB = new User() { Identification = user.Id, Username = user.Username, Email = user.Email, Phone = user.Phone, Password = user.Password, Role = "user" };
                 // Generación del hash y la sal
                 using (var hashAlgorithm = new Rfc2898DeriveBytes(user.Password, 32, 10000))
                 {
@@ -121,8 +51,8 @@ namespace JwtBaseApiNetCore.Controllers
 
                 }
 
-                await _mongoDBService.AddUserAsync(userDB);
-                return CreatedAtAction(nameof(Get), new { id = userDB.Id }, userDB);
+                await _mongoDBService.AddUserAsync(userDB, userDB.Role);
+                return CreatedAtAction(nameof(GetAllUsers), new { id = userDB.Id }, userDB);
             }
             catch (Exception e)
             {
@@ -147,17 +77,17 @@ namespace JwtBaseApiNetCore.Controllers
                 using (var hashAlgorithm = new Rfc2898DeriveBytes(loginRequest.Password, Convert.FromBase64String(UserDB.KeyWordHash), 10000))
                 {
                     byte[] providedHash = hashAlgorithm.GetBytes(256 / 8);
-                    bool isPasswordCorrect = ByteArraysEqual(Convert.FromBase64String(UserDB.Password), providedHash);
+                    bool isPasswordCorrect = IToken.ByteArraysEqual(Convert.FromBase64String(UserDB.Password), providedHash);
 
                     if (!isPasswordCorrect)
                     {
                         return Unauthorized("Credenciales incorrectas");
                     }
                 }
-
+                IToken tokenGenerator = new IToken();
                 var response = new
                 {
-                    token = GenerateToken(UserDB.Email)
+                    token = tokenGenerator.GenerateToken(UserDB, _jwtConfig)
                 };
                 return Ok(response);
             }
@@ -174,9 +104,10 @@ namespace JwtBaseApiNetCore.Controllers
         {
             try
             {
-                if (ValidateFields(new List<string> { sessionRequest.Email })) return BadRequest("Es necesario agregar una direccion de correo valida");
-
-                string newToken = GenerateToken(sessionRequest.Email);
+                if (IToken.ValidateFields(new List<string> { sessionRequest.Email })) return BadRequest("Es necesario agregar una direccion de correo valida");
+                User user = new User() { Email = sessionRequest.Email, Role = "admin" };
+                IToken tokenGenerator = new IToken();
+                string newToken = tokenGenerator.GenerateToken(user, _jwtConfig);
 
                 if (string.IsNullOrEmpty(newToken)) throw new Exception("Ocurrió un error al momento de generar el token");
                 var newTokenExpirationTime = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();

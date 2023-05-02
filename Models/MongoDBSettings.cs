@@ -1,4 +1,4 @@
-﻿namespace JwtBaseApiNetCore.Models;
+﻿namespace ApiWikiTech.Models;
 
 public class MongoDBSettings
 {

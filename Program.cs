@@ -1,5 +1,5 @@
-using JwtBaseApiNetCore.Models;
-using JwtBaseApiNetCore.Services;
+using ApiWikiTech.Models;
+using ApiWikiTech.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 
@@ -23,7 +23,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
         };
     });
-
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RequireRoles", policy =>
+    {
+        policy.RequireRole("admin", "technician", "user");
+    });
+});
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();

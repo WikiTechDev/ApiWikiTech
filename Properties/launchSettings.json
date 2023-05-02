@@ -9,7 +9,7 @@
     }
   },
   "profiles": {
-    "JwtBaseApiNetCore": {
+    "ApiWikiTech": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,

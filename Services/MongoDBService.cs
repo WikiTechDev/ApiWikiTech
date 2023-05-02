@@ -1,9 +1,10 @@
-﻿using JwtBaseApiNetCore.Models;
+﻿using ApiWikiTech.Models;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using MongoDB.Bson;
+using System.Data;
 
-namespace JwtBaseApiNetCore.Services;
+namespace ApiWikiTech.Services;
 
 public class MongoDBService
 {
@@ -19,20 +20,27 @@ public class MongoDBService
 
     public async Task<List<User>> GetAsyncUsers()
     {
-        return await _userCollection.Find(new BsonDocument()).ToListAsync();
+        return await _userCollection.Find(_ => true).ToListAsync();
     }
-    public async Task AddUserAsync(User user)
+    public async Task AddUserAsync(User user, string role)
     {
+        user.Role = role;
         await _userCollection.InsertOneAsync(user);
         return;
     }
 
     public async Task<User> GetAsyncOneUser(string email)
     {
-        var filter = Builders<User>.Filter.Eq("email", email);
-        User user =  _userCollection.Find(filter).FirstOrDefault();
+        var filter = Builders<User>.Filter.Eq(u => u.Email, email);
+        User user = _userCollection.Find(filter).FirstOrDefault();
         return user;
     }
+    public async Task<User> GetUserByIdAsync(string id)
+    {
+        var filter = Builders<User>.Filter.Eq("_id", ObjectId.Parse(id));
+        return await _userCollection.Find(filter).FirstOrDefaultAsync();
+    }
+
     /*
         
         public async Task CreateAsync(User playlist) { }

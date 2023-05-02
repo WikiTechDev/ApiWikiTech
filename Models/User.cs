@@ -1,9 +1,9 @@
-﻿using JwtBaseApiNetCore.Controllers;
+﻿using ApiWikiTech.Controllers;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
 
-namespace JwtBaseApiNetCore.Models;
+namespace ApiWikiTech.Models;
 
 public class User
 {
@@ -11,7 +11,8 @@ public class User
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
     public string? Id { get; set; }
-
+    [BsonElement("identification")]
+    public string Identification { get; set; } 
     [BsonElement("name")]
     public string Username { get; set; } 
 
@@ -26,5 +27,7 @@ public class User
 
     [BsonElement("salt")]
     public string KeyWordHash { get; set; }
+    [BsonElement("role")]
+    public string Role { get; set; }
 
 }

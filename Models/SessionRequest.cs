@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace JwtBaseApiNetCore.Controllers
+namespace ApiWikiTech.Models
 {
     public class SessionRequest
     {
@@ -11,6 +11,8 @@ namespace JwtBaseApiNetCore.Controllers
 
     public class RegisterRequest
     {
+        [JsonPropertyName("identification")]
+        public string Id { get; set; } = string.Empty;
         [JsonPropertyName("username")]
         public string Username { get; set; } = string.Empty;
         [JsonPropertyName("email")]
